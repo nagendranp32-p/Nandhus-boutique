@@ -1,0 +1,4 @@
+node_modules/ 
+backend/target/ 
+backend/uploads/ 
+backend/admin-pin.txt
