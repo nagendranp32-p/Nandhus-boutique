@@ -4,31 +4,32 @@ import CatalogCard from '../components/CatalogCard';
 
 const CATEGORIES = ['All', 'Silk Sarees', 'Designer Kurtis', 'Bridal Wear', 'Casuals'];
 
+const FALLBACK_IMG = 'https://images.pexels.com/photos/2983464/pexels-photo-2983464.jpeg?auto=compress&cs=tinysrgb&w=900';
+
 const BANNER_SLIDES = [
   {
-    url: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=900&q=85',
+    url: 'https://images.pexels.com/photos/2983464/pexels-photo-2983464.jpeg?auto=compress&cs=tinysrgb&w=900',
     tag: 'ROYAL KANCHIPURAM SILKS',
   },
   {
-    url: 'https://images.unsplash.com/photo-1583391733956-6c78276477e2?auto=format&fit=crop&w=900&q=85',
+    url: 'https://images.pexels.com/photos/1536619/pexels-photo-1536619.jpeg?auto=compress&cs=tinysrgb&w=900',
     tag: 'BRIDAL COUTURE EDITION',
   },
   {
-    url: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?auto=format&fit=crop&w=900&q=85',
+    url: 'https://images.pexels.com/photos/1926769/pexels-photo-1926769.jpeg?auto=compress&cs=tinysrgb&w=900',
     tag: 'FESTIVE DESIGNER WEAR',
   },
   {
-    url: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=900&q=85',
+    url: 'https://images.pexels.com/photos/994523/pexels-photo-994523.jpeg?auto=compress&cs=tinysrgb&w=900',
     tag: 'HANDCRAFTED ELEGANCE',
   },
 ];
 
-export default function Home({ products, loading, onSelectProduct }) {
+export default function Home({ products = [], loading, onSelectProduct }) {
   const [selectedCat, setSelectedCat] = useState('All');
   const [slideIndex, setSlideIndex] = useState(0);
   const catalogSectionRef = useRef(null);
 
-  // Automatic-ah ovvoru 3.5 seconds-kum banner image maarum
   useEffect(() => {
     const timer = setInterval(() => {
       setSlideIndex((prev) => (prev + 1) % BANNER_SLIDES.length);
@@ -43,7 +44,7 @@ export default function Home({ products, loading, onSelectProduct }) {
   const filtered =
     selectedCat === 'All'
       ? products
-      : products.filter((p) => p.category.toLowerCase() === selectedCat.toLowerCase());
+      : products.filter((p) => p.category?.toLowerCase() === selectedCat.toLowerCase());
 
   return (
     <>
@@ -94,6 +95,11 @@ export default function Home({ products, loading, onSelectProduct }) {
                   key={slide.url}
                   src={slide.url}
                   alt={slide.tag}
+                  loading={idx === 0 ? 'eager' : 'lazy'}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = FALLBACK_IMG;
+                  }}
                   className={`slide-img ${slideIndex === idx ? 'active' : ''}`}
                 />
               ))}
@@ -154,7 +160,7 @@ export default function Home({ products, loading, onSelectProduct }) {
             ))}
           </div>
 
-          {loading ? (
+          {loading && products.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', padding: '40px 0', textAlign: 'center' }}>
               Loading boutique catalogs...
             </p>

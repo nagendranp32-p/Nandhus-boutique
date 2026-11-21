@@ -9,6 +9,12 @@ import Footer from './components/Footer';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 const CACHE_KEY = 'nandhus_products_cache_v1';
 
+// Pre-warm Axios instance with timeout so requests never hang forever
+const api = axios.create({
+  baseURL: API_URL,
+  timeout: 25000,
+});
+
 export default function App() {
   const [products, setProducts] = useState(() => {
     try {
@@ -20,7 +26,14 @@ export default function App() {
   });
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(() => !localStorage.getItem(CACHE_KEY));
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      return !cached || JSON.parse(cached).length === 0;
+    } catch {
+      return true;
+    }
+  });
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
   const syncProducts = useCallback((updater) => {
@@ -37,7 +50,7 @@ export default function App() {
 
   const fetchProducts = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_URL}/products`);
+      const res = await api.get('/products');
       const list = Array.isArray(res.data) ? res.data : [];
       syncProducts(list);
     } catch (err) {
@@ -51,28 +64,53 @@ export default function App() {
     fetchProducts();
   }, [fetchProducts]);
 
-  // Instant optimistic delete (0ms UI removal)
-  const handleDeleteProduct = async (id) => {
-    const backup = products;
-    syncProducts((prev) => prev.filter((item) => item.id !== id));
+  // 0ms Instant Optimistic Delete (never suffers from stale closure)
+  const handleDeleteProduct = useCallback(
+    async (id) => {
+      let deletedItem = null;
+      let deletedIndex = -1;
 
-    try {
-      await axios.delete(`${API_URL}/products/${id}`);
-    } catch (err) {
-      console.error('Delete failed, restoring item:', err);
-      syncProducts(backup);
-      alert('Delete failed. Please check your connection.');
-    }
-  };
+      syncProducts((prev) => {
+        deletedIndex = prev.findIndex((item) => item.id === id);
+        if (deletedIndex !== -1) {
+          deletedItem = prev[deletedIndex];
+        }
+        return prev.filter((item) => item.id !== id);
+      });
 
-  // Instant product addition without full page reload
-  const handleProductAdded = (newProduct) => {
-    if (newProduct && newProduct.id) {
-      syncProducts((prev) => [newProduct, ...prev]);
-    } else {
-      fetchProducts();
-    }
-  };
+      try {
+        await api.delete(`/products/${id}`);
+      } catch (err) {
+        console.error('Delete failed, restoring item:', err);
+        if (deletedItem) {
+          syncProducts((prev) => {
+            const restored = [...prev];
+            restored.splice(Math.max(0, deletedIndex), 0, deletedItem);
+            return restored;
+          });
+        }
+        alert('Delete failed. Please check your connection.');
+      }
+    },
+    [syncProducts]
+  );
+
+  // 0ms Instant Product Addition (and instant update if editing)
+  const handleProductAdded = useCallback(
+    (newProduct) => {
+      if (newProduct && newProduct.id) {
+        syncProducts((prev) => {
+          const exists = prev.some((p) => p.id === newProduct.id);
+          return exists
+            ? prev.map((p) => (p.id === newProduct.id ? newProduct : p))
+            : [newProduct, ...prev];
+        });
+      } else {
+        fetchProducts();
+      }
+    },
+    [syncProducts, fetchProducts]
+  );
 
   const categories = ['All', ...new Set(products.map((p) => p.category).filter(Boolean))];
 
@@ -125,7 +163,7 @@ export default function App() {
           </div>
         </div>
 
-        {loading ? (
+        {loading && products.length === 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[1, 2, 3, 4].map((n) => (
               <div key={n} className="bg-white rounded-2xl h-96 animate-pulse border border-stone-200" />
